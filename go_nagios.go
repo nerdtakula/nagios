@@ -25,6 +25,7 @@ var (
 	}
 )
 
+//--------------------------------------------------------------
 // A type representing a Nagios check status. The Value is a the exit code
 // expected for the check and the Message is the specific output string.
 type NagiosStatus struct {
@@ -43,6 +44,61 @@ func (status *NagiosStatus) Aggregate(otherStatuses []*NagiosStatus) {
 		status.Message += " - " + s.Message
 	}
 }
+
+// Construct the Nagios message
+func (status *NagiosStatus) constructedNagiosMessage() string {
+	return valMessages[status.Value] + " " + status.Message
+}
+
+// NagiosStatus: Issue a Nagios message to stdout and exit with appropriate Nagios code
+func (status *NagiosStatus) NagiosExit() {
+	fmt.Fprintln(os.Stdout, status.constructedNagiosMessage())
+	os.Exit(int(status.Value))
+}
+
+//--------------------------------------------------------------
+// A type representing a Nagios performance data value.
+// https://nagios-plugins.org/doc/guidelines.html#AEN200
+// http://docs.pnp4nagios.org/pnp-0.6/about#system_requirements
+type NagiosPerformanceVal struct {
+	Label         string
+	Value         string
+	Uom           string
+	WarnThreshold string
+	CritThreshold string
+	MinValue      string
+	MaxValue      string
+}
+
+//--------------------------------------------------------------
+// A type representing a Nagios check status and performance data.
+type NagiosStatusWithPerformanceData struct {
+	*NagiosStatus
+	Perfdata NagiosPerformanceVal
+}
+
+// Construct the Nagios message with performance data
+func (status *NagiosStatusWithPerformanceData) constructedNagiosMessage() string {
+	msg := fmt.Sprintf("%s %s | '%s'=%s%s;%s;%s;%s;%s",
+		valMessages[status.Value],
+		status.Message,
+		status.Perfdata.Label,
+		status.Perfdata.Value,
+		status.Perfdata.Uom,
+		status.Perfdata.WarnThreshold,
+		status.Perfdata.CritThreshold,
+		status.Perfdata.MinValue,
+		status.Perfdata.MaxValue)
+	return msg
+}
+
+// Issue a Nagios message (with performance data) to stdout and exit with appropriate Nagios code
+func (status *NagiosStatusWithPerformanceData) NagiosExit() {
+	fmt.Fprintln(os.Stdout, status.constructedNagiosMessage())
+	os.Exit(int(status.Value))
+}
+
+//--------------------------------------------------------------
 
 // Exit with an UNKNOWN status and appropriate message
 func Unknown(output string) {
@@ -66,6 +122,5 @@ func Ok(output string) {
 
 // Exit with a particular NagiosStatus
 func ExitWithStatus(status *NagiosStatus) {
-	fmt.Fprintln(os.Stdout, valMessages[status.Value], status.Message)
-	os.Exit(int(status.Value))
+	status.NagiosExit()
 }
