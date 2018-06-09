@@ -56,12 +56,12 @@ func (s Status) Int() int { return s.State.Int() }
 
 // Aggregate takes multiple Status structs and combines them into this struct.
 // Uses the highest State value and combines all the messages
-func (s *Status) Aggregate(statuses ...StatusType) {
+func (s *Status) Aggregate(statuses ...*Status) {
 	for _, o := range statuses {
-		if o.(*Status).State > s.State {
-			s.State = o.(*Status).State
+		if o.State > s.State {
+			s.State = o.State
 		}
-		s.Message += " - " + o.(*Status).Message
+		s.Message += " - " + o.Message
 	}
 }
 
@@ -74,7 +74,7 @@ func (s Status) Exit() {
 
 // Aggregate takes multiple Status structs and combines them. Uses the highest
 // State value and combines all the messages.
-func Aggregate(statuses ...StatusType) (*Status, error) {
+func Aggregate(statuses ...*Status) (*Status, error) {
 	if len(statuses) == 0 {
 		return nil, fmt.Errorf("no statuses provided to aggregate")
 	}
@@ -83,14 +83,21 @@ func Aggregate(statuses ...StatusType) (*Status, error) {
 	msgs := make([]string, len(statuses))
 
 	for i, s := range statuses {
-		if s.(*Status).State > t.State {
-			t.State = s.(*Status).State
+		if s.State > t.State {
+			t.State = s.State
 		}
-		msgs[i] = s.(*Status).Message
+		msgs[i] = s.Message
 	}
 
 	t.Message = strings.Join(msgs, " - ")
 	return t, nil
+}
+
+// AggregateWithPerfdata takes multiple Status structs with Performance data
+// and combines them. Uses the highest State value and combines all the
+// messages.
+func AggregateWithPerfdata(statuses ...*StatusWithPerformanceData) (*StatusWithPerformanceData, error) {
+	return nil, nil
 }
 
 // Perfdata is a type representing the Nagios performance data structure.
@@ -141,6 +148,11 @@ func (s StatusWithPerformanceData) String() string {
 
 // Int returns the value of the state.
 func (s StatusWithPerformanceData) Int() int { return s.State.Int() }
+
+// Aggregate takes multiple Status with Performance data structs and combines
+// them into this struct. Uses the highest State value and combines all the
+// messages.
+func (s *StatusWithPerformanceData) Aggregate(statuses ...*StatusWithPerformanceData) {}
 
 // Exit is designed to be called via the `defer` keyword. Prints a Nagios
 // message to STDOUT and exits with appropriate Nagios code.

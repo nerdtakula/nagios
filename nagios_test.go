@@ -6,82 +6,146 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestNagiosStatus_Aggregate(t *testing.T) {
-	Convey("Aggregates statuses together", t, func() {
+func TestState_String(t *testing.T) {
+	Convey("Maps the correct strings to values", t, func() {
+		So(stateStrings[STATE_UNKNOWN], ShouldEqual, "UNKNOWN")
+		So(stateStrings[STATE_CRITICAL], ShouldEqual, "CRITICAL")
+		So(stateStrings[STATE_WARNING], ShouldEqual, "WARNING")
+		So(stateStrings[STATE_OK], ShouldEqual, "OK")
+	})
+}
 
-		otherStatuses := []*NagiosStatus{
-			&NagiosStatus{"ok", NAGIOS_OK},
-			&NagiosStatus{"Not so bad", NAGIOS_WARNING},
+func Test_Aggregate(t *testing.T) {
+	Convey("Aggregates statuses together", t, func() {
+		Convey("Aggregates basic statuses together", func() {
+			statuses := []StatusType{
+				&Status{"ok", STATE_OK},
+				&Status{"Not so bad", STATE_WARNING},
+			}
+
+			s, _ := Aggregate(statuses...)
+			So(s.State.Int(), ShouldEqual, STATE_WARNING)
+			So(s.Message, ShouldEqual, "ok - Not so bad")
+			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
+		})
+
+		Convey("Aggregates statuses with perfdata together", func() {
+			statuses := []StatusType{
+				&StatusWithPerformanceData{
+					Status: &Status{
+						Message: "ok",
+						State:   STATE_OK,
+					},
+					Perfdata: nil,
+				},
+				&StatusWithPerformanceData{
+					Status: &Status{
+						Message: "Not so bad",
+						State:   STATE_WARNING,
+					},
+					Perfdata: nil,
+				},
+			}
+
+			s, _ := Aggregate(statuses...)
+			So(s.State.Int(), ShouldEqual, STATE_WARNING)
+			So(s.Message, ShouldEqual, "ok - Not so bad")
+			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
+		})
+
+		Convey("Aggregates basic statuses and statuses with perfdata together", func() {
+			statuses := []StatusType{
+				&Status{"ok", STATE_OK},
+				&StatusWithPerformanceData{
+					Status: &Status{
+						Message: "Not so bad",
+						State:   STATE_WARNING,
+					},
+					Perfdata: nil,
+				},
+			}
+
+			s, _ := Aggregate(statuses...)
+			So(s.State.Int(), ShouldEqual, STATE_WARNING)
+			So(s.Message, ShouldEqual, "ok - Not so bad")
+			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
+		})
+	})
+}
+
+func TestStatus_Aggregate(t *testing.T) {
+	Convey("Aggregates statuses together into existing status", t, func() {
+		otherStatuses := []StatusType{
+			&Status{"ok", STATE_OK},
+			&Status{"Not so bad", STATE_WARNING},
 		}
 
 		Convey("Picks the worst status", func() {
-			status := &NagiosStatus{"Uh oh", NAGIOS_CRITICAL}
-			status.Aggregate(otherStatuses)
+			status := &Status{"Uh oh", STATE_CRITICAL}
+			status.Aggregate(otherStatuses...)
 
-			So(status.Value, ShouldEqual, NAGIOS_CRITICAL)
+			So(status.State, ShouldEqual, STATE_CRITICAL)
 		})
 
 		Convey("Aggregates the messages", func() {
-			status := &NagiosStatus{"Uh oh", NAGIOS_CRITICAL}
-			status.Aggregate(otherStatuses)
+			status := &Status{"Uh oh", STATE_CRITICAL}
+			status.Aggregate(otherStatuses...)
 
 			So(status.Message, ShouldEqual, "Uh oh - ok - Not so bad")
 		})
 
 		Convey("Handles an empty slice", func() {
-			status := &NagiosStatus{"Uh oh", NAGIOS_CRITICAL}
-			status.Aggregate([]*NagiosStatus{})
+			status := &Status{"Uh oh", STATE_CRITICAL}
+			emptySlice := make([]StatusType, 0)
+			status.Aggregate(emptySlice...)
 
-			So(status.Value, ShouldEqual, NAGIOS_CRITICAL)
+			So(status.State, ShouldEqual, STATE_CRITICAL)
 			So(status.Message, ShouldEqual, "Uh oh")
 		})
-
 	})
 }
 
-func TestValMessages(t *testing.T) {
-	Convey("Maps the correct strings to values", t, func() {
-		So(valMessages[NAGIOS_UNKNOWN], ShouldEqual, "UNKNOWN:")
-		So(valMessages[NAGIOS_CRITICAL], ShouldEqual, "CRITICAL:")
-		So(valMessages[NAGIOS_WARNING], ShouldEqual, "WARNING:")
-		So(valMessages[NAGIOS_OK], ShouldEqual, "OK:")
-	})
-}
+func TestStatusWithPerformanceData_Aggregate(t *testing.T) {}
+
+func TestStatusType_Aggregate(t *testing.T) {}
+
+func TestPerfdata(t *testing.T) {}
 
 func TestConstructedNagiosMessage(t *testing.T) {
 	Convey("Constructs a Nagios message without performance data", t, func() {
-		statusUnknown := &NagiosStatus{"Shrug dunno", NAGIOS_UNKNOWN}
-		So(statusUnknown.constructedNagiosMessage(), ShouldEqual, "UNKNOWN: Shrug dunno")
+		statusUnknown := &Status{"Shrug dunno", STATE_UNKNOWN}
+		So(statusUnknown.String(), ShouldEqual, "UNKNOWN: Shrug dunno")
 
-		statusCritical := &NagiosStatus{"Uh oh", NAGIOS_CRITICAL}
-		So(statusCritical.constructedNagiosMessage(), ShouldEqual, "CRITICAL: Uh oh")
+		statusCritical := &Status{"Uh oh", STATE_CRITICAL}
+		So(statusCritical.String(), ShouldEqual, "CRITICAL: Uh oh")
 
-		statusWarning := &NagiosStatus{"Not so bad", NAGIOS_WARNING}
-		So(statusWarning.constructedNagiosMessage(), ShouldEqual, "WARNING: Not so bad")
+		statusWarning := &Status{"Not so bad", STATE_WARNING}
+		So(statusWarning.String(), ShouldEqual, "WARNING: Not so bad")
 
-		statusOK := &NagiosStatus{"ok", NAGIOS_OK}
-		So(statusOK.constructedNagiosMessage(), ShouldEqual, "OK: ok")
+		statusOK := &Status{"ok", STATE_OK}
+		So(statusOK.String(), ShouldEqual, "OK: ok")
 	})
 
 	Convey("Constructs a Nagios message with performance data", t, func() {
-		statusUnknown := &NagiosStatus{"Shrug dunno", NAGIOS_UNKNOWN}
-		perfdata1 := NagiosPerformanceVal{"metric", "1234", "ms", "12", "3400", "0", "99999"}
-		statusUnknownPerf := &NagiosStatusWithPerformanceData{statusUnknown, perfdata1}
-		So(statusUnknownPerf.constructedNagiosMessage(), ShouldEqual, "UNKNOWN: Shrug dunno | 'metric'=1234ms;12;3400;0;99999")
+		statusUnknown := &Status{"Shrug dunno", STATE_UNKNOWN}
 
-		statusCritical := &NagiosStatus{"Uh oh", NAGIOS_CRITICAL}
-		perfdata2 := NagiosPerformanceVal{"metric", "1234", "ms", "12", "3400", "", ""}
-		statusCriticalPerf := &NagiosStatusWithPerformanceData{statusCritical, perfdata2}
-		So(statusCriticalPerf.constructedNagiosMessage(), ShouldEqual, "CRITICAL: Uh oh | 'metric'=1234ms;12;3400;;")
+		perfdata1 := Perfdata{Label: "metric", Value: "1234", Uom: "ms", WarnThreshold: "12", CritThreshold: "3400", MinValue: "0", MaxValue: "99999"}
+		statusUnknownPerf := &StatusWithPerformanceData{statusUnknown, []Perfdata{perfdata1}}
+		So(statusUnknownPerf.String(), ShouldEqual, "UNKNOWN: Shrug dunno | 'metric'=1234ms;12;3400;0;99999")
 
-		statusWarning := &NagiosStatus{"Not so bad", NAGIOS_WARNING}
-		perfdata3 := NagiosPerformanceVal{"metric", "1234", "ms", "", "", "0", "99999"}
-		statusWarningPerf := &NagiosStatusWithPerformanceData{statusWarning, perfdata3}
-		So(statusWarningPerf.constructedNagiosMessage(), ShouldEqual, "WARNING: Not so bad | 'metric'=1234ms;;;0;99999")
+		statusCritical := &Status{"Uh oh", STATE_CRITICAL}
+		perfdata2 := Perfdata{Label: "metric", Value: "1234", Uom: "ms", WarnThreshold: "12", CritThreshold: "3400", MinValue: "", MaxValue: ""}
+		statusCriticalPerf := &StatusWithPerformanceData{statusCritical, []Perfdata{perfdata2}}
+		So(statusCriticalPerf.String(), ShouldEqual, "CRITICAL: Uh oh | 'metric'=1234ms;12;3400;;")
 
-		statusOK := &NagiosStatus{"ok", NAGIOS_OK}
-		perfdata4 := NagiosPerformanceVal{"metric", "1234", "", "12", "3400", "0", "99999"}
-		statusOKPerf := &NagiosStatusWithPerformanceData{statusOK, perfdata4}
-		So(statusOKPerf.constructedNagiosMessage(), ShouldEqual, "OK: ok | 'metric'=1234;12;3400;0;99999")
+		statusWarning := &Status{"Not so bad", STATE_WARNING}
+		perfdata3 := Perfdata{Label: "metric", Value: "1234", Uom: "ms", WarnThreshold: "", CritThreshold: "", MinValue: "0", MaxValue: "99999"}
+		statusWarningPerf := &StatusWithPerformanceData{statusWarning, []Perfdata{perfdata3}}
+		So(statusWarningPerf.String(), ShouldEqual, "WARNING: Not so bad | 'metric'=1234ms;;;0;99999")
+
+		statusOK := &Status{"ok", STATE_OK}
+		perfdata4 := Perfdata{Label: "metric", Value: "1234", Uom: "", WarnThreshold: "12", CritThreshold: "3400", MinValue: "0", MaxValue: "99999"}
+		statusOKPerf := &StatusWithPerformanceData{statusOK, []Perfdata{perfdata4}}
+		So(statusOKPerf.String(), ShouldEqual, "OK: ok | 'metric'=1234;12;3400;0;99999")
 	})
 }
