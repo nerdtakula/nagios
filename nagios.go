@@ -3,64 +3,101 @@ package nagios
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
-type NagiosStatusVal int
+// State is a representation of the available exit codes supported by the
+// Nagios spec.
+type State int
 
-// The values with which a Nagios check can exit
+// String returns a string representation of the State.
+func (s State) String() string { return stateStrings[s] }
+
+// Int returns the type casted value
+func (s State) Int() int { return int(s) }
+
 const (
-	NAGIOS_OK NagiosStatusVal = iota
-	NAGIOS_WARNING
-	NAGIOS_CRITICAL
-	NAGIOS_UNKNOWN
+	// The values with which a Nagios check can exit.
+	STATE_OK State = iota
+	STATE_WARNING
+	STATE_CRITICAL
+	STATE_UNKNOWN
 )
 
-// Maps the NagiosStatusVal entries to output strings
 var (
-	valMessages = []string{
-		"OK:",
-		"WARNING:",
-		"CRITICAL:",
-		"UNKNOWN:",
+	// Maps the State entries to output strings.
+	stateStrings = map[State]string{
+		STATE_OK:       "OK",
+		STATE_WARNING:  "WARNING",
+		STATE_CRITICAL: "CRITICAL",
+		STATE_UNKNOWN:  "UNKNOWN",
 	}
 )
 
-//--------------------------------------------------------------
-// A type representing a Nagios check status. The Value is a the exit code
-// expected for the check and the Message is the specific output string.
-type NagiosStatus struct {
-	Message string
-	Value   NagiosStatusVal
+// StatusType is a basic interface
+type StatusType interface {
+	String() string
+	Int() int
+	Aggregate(statuses ...StatusType)
+	Exit()
 }
 
-// Take a bunch of NagiosStatus pointers and find the highest value, then
-// combine all the messages. Things win in the order of highest to lowest.
-func (status *NagiosStatus) Aggregate(otherStatuses []*NagiosStatus) {
-	for _, s := range otherStatuses {
-		if status.Value < s.Value {
-			status.Value = s.Value
-		}
+// Status is a type representing a Nagios check status.
+type Status struct {
+	Message string
+	State   State
+}
 
-		status.Message += " - " + s.Message
+// String returns a string representation of the Status.
+func (s Status) String() string { return fmt.Sprintf("%s: %s", s.State, s.Message) }
+
+// Int returns the State integer value
+func (s Status) Int() int { return s.State.Int() }
+
+// Aggregate takes multiple Status structs and combines them into this struct.
+// Uses the highest State value and combines all the messages
+func (s *Status) Aggregate(statuses ...StatusType) {
+	for _, o := range statuses {
+		if o.(*Status).State > s.State {
+			s.State = o.(*Status).State
+		}
+		s.Message += " - " + o.(*Status).Message
 	}
 }
 
-// Construct the Nagios message
-func (status *NagiosStatus) constructedNagiosMessage() string {
-	return valMessages[status.Value] + " " + status.Message
+// Exit is designed to be called via the `defer` keyword. Prints a Nagios
+// message to STDOUT and exits with appropriate Nagios code.
+func (s Status) Exit() {
+	fmt.Fprintln(os.Stdout, s)
+	os.Exit(s.State.Int())
 }
 
-// NagiosStatus: Issue a Nagios message to stdout and exit with appropriate Nagios code
-func (status *NagiosStatus) NagiosExit() {
-	fmt.Fprintln(os.Stdout, status.constructedNagiosMessage())
-	os.Exit(int(status.Value))
+// Aggregate takes multiple Status structs and combines them. Uses the highest
+// State value and combines all the messages.
+func Aggregate(statuses ...StatusType) (*Status, error) {
+	if len(statuses) == 0 {
+		return nil, fmt.Errorf("no statuses provided to aggregate")
+	}
+
+	t := &Status{}
+	msgs := make([]string, len(statuses))
+
+	for i, s := range statuses {
+		if s.(*Status).State > t.State {
+			t.State = s.(*Status).State
+		}
+		msgs[i] = s.(*Status).Message
+	}
+
+	t.Message = strings.Join(msgs, " - ")
+	return t, nil
 }
 
-//--------------------------------------------------------------
-// A type representing a Nagios performance data value.
-// https://nagios-plugins.org/doc/guidelines.html#AEN200
-// http://docs.pnp4nagios.org/pnp-0.6/about#system_requirements
-type NagiosPerformanceVal struct {
+// Perfdata is a type representing the Nagios performance data structure.
+// > https://nagios-plugins.org/doc/guidelines.html#AEN200
+// >    'label'=value[UOM];[warn];[crit];[min];[max]
+// > http://docs.pnp4nagios.org/pnp-0.6/about#system_requirements
+type Perfdata struct {
 	Label         string
 	Value         string
 	Uom           string
@@ -70,57 +107,72 @@ type NagiosPerformanceVal struct {
 	MaxValue      string
 }
 
-//--------------------------------------------------------------
-// A type representing a Nagios check status and performance data.
-type NagiosStatusWithPerformanceData struct {
-	*NagiosStatus
-	Perfdata NagiosPerformanceVal
+func (p Perfdata) String() string {
+	return fmt.Sprintf("'%s'=%s%s;%s;%s;%s;%s",
+		p.Label,
+		p.Value,
+		p.Uom,
+		p.WarnThreshold,
+		p.CritThreshold,
+		p.MinValue,
+		p.MaxValue)
 }
 
-// Construct the Nagios message with performance data
-func (status *NagiosStatusWithPerformanceData) constructedNagiosMessage() string {
-	msg := fmt.Sprintf("%s %s | '%s'=%s%s;%s;%s;%s;%s",
-		valMessages[status.Value],
-		status.Message,
-		status.Perfdata.Label,
-		status.Perfdata.Value,
-		status.Perfdata.Uom,
-		status.Perfdata.WarnThreshold,
-		status.Perfdata.CritThreshold,
-		status.Perfdata.MinValue,
-		status.Perfdata.MaxValue)
-	return msg
+// StatusWithPerformanceData provides a type representation of a Nagios check
+// status containing performance data.
+type StatusWithPerformanceData struct {
+	*Status
+	Perfdata []Perfdata
 }
 
-// Issue a Nagios message (with performance data) to stdout and exit with appropriate Nagios code
-func (status *NagiosStatusWithPerformanceData) NagiosExit() {
-	fmt.Fprintln(os.Stdout, status.constructedNagiosMessage())
-	os.Exit(int(status.Value))
+func (s StatusWithPerformanceData) String() string {
+	if s.Perfdata == nil || len(s.Perfdata) == 0 {
+		return fmt.Sprintf("%s: %s", s.State, s.Message)
+	}
+
+	pd := make([]string, len(s.Perfdata))
+	for i, p := range s.Perfdata {
+		pd[i] = p.String()
+	}
+
+	pdStr := strings.Join(pd, "; ")
+	return fmt.Sprintf("%s: %s | %s", s.State, s.Message, pdStr)
 }
 
-//--------------------------------------------------------------
+// Int returns the value of the state.
+func (s StatusWithPerformanceData) Int() int { return s.State.Int() }
 
-// Exit with an UNKNOWN status and appropriate message
+// Exit is designed to be called via the `defer` keyword. Prints a Nagios
+// message to STDOUT and exits with appropriate Nagios code.
+func (s StatusWithPerformanceData) Exit() {
+	fmt.Fprintln(os.Stdout, s)
+	os.Exit(s.State.Int())
+}
+
+// Unknown provides a quick way to exit with an UNKNOWN state and appropriate
+// message.
 func Unknown(output string) {
-	ExitWithStatus(&NagiosStatus{output, NAGIOS_UNKNOWN})
+	ExitWithStatus(&Status{output, STATE_UNKNOWN})
 }
 
-// Exit with an CRITICAL status and appropriate message
+// Critical provides a quick way to exit with an CRITICAL state and
+// appropriate message.
 func Critical(err error) {
-	ExitWithStatus(&NagiosStatus{err.Error(), NAGIOS_CRITICAL})
+	ExitWithStatus(&Status{err.Error(), STATE_CRITICAL})
 }
 
-// Exit with an WARNING status and appropriate message
+// Warning provides a quick way to exit with an WARNING state and appropriate
+// message.
 func Warning(output string) {
-	ExitWithStatus(&NagiosStatus{output, NAGIOS_WARNING})
+	ExitWithStatus(&Status{output, STATE_WARNING})
 }
 
-// Exit with an OK status and appropriate message
-func Ok(output string) {
-	ExitWithStatus(&NagiosStatus{output, NAGIOS_OK})
+// OK provides a quick way to exit with an OK state and appropriate message.
+func OK(output string) {
+	ExitWithStatus(&Status{output, STATE_OK})
 }
 
-// Exit with a particular NagiosStatus
-func ExitWithStatus(status *NagiosStatus) {
-	status.NagiosExit()
+// ExitWithStatus ...
+func ExitWithStatus(status StatusType) {
+	status.Exit()
 }
