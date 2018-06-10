@@ -18,7 +18,7 @@ func TestState_String(t *testing.T) {
 func Test_Aggregate(t *testing.T) {
 	Convey("Aggregates statuses together", t, func() {
 		Convey("Aggregates basic statuses together", func() {
-			statuses := []StatusType{
+			statuses := []*Status{
 				&Status{"ok", STATE_OK},
 				&Status{"Not so bad", STATE_WARNING},
 			}
@@ -30,52 +30,56 @@ func Test_Aggregate(t *testing.T) {
 		})
 
 		Convey("Aggregates statuses with perfdata together", func() {
-			statuses := []StatusType{
+			statuses := []*StatusWithPerformanceData{
 				&StatusWithPerformanceData{
 					Status: &Status{
 						Message: "ok",
 						State:   STATE_OK,
 					},
-					Perfdata: nil,
+					Perfdata: []Perfdata{
+						Perfdata{},
+					},
 				},
 				&StatusWithPerformanceData{
 					Status: &Status{
 						Message: "Not so bad",
 						State:   STATE_WARNING,
 					},
-					Perfdata: nil,
-				},
-			}
-
-			s, _ := Aggregate(statuses...)
-			So(s.State.Int(), ShouldEqual, STATE_WARNING)
-			So(s.Message, ShouldEqual, "ok - Not so bad")
-			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
-		})
-
-		Convey("Aggregates basic statuses and statuses with perfdata together", func() {
-			statuses := []StatusType{
-				&Status{"ok", STATE_OK},
-				&StatusWithPerformanceData{
-					Status: &Status{
-						Message: "Not so bad",
-						State:   STATE_WARNING,
+					Perfdata: []Perfdata{
+						Perfdata{},
 					},
-					Perfdata: nil,
 				},
 			}
 
-			s, _ := Aggregate(statuses...)
+			s, _ := AggregateWithPerfdata(statuses...)
 			So(s.State.Int(), ShouldEqual, STATE_WARNING)
 			So(s.Message, ShouldEqual, "ok - Not so bad")
 			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
 		})
+
+		// Convey("Aggregates basic statuses and statuses with perfdata together", func() {
+		// 	statuses := []StatusType{
+		// 		&Status{"ok", STATE_OK},
+		// 		&StatusWithPerformanceData{
+		// 			Status: &Status{
+		// 				Message: "Not so bad",
+		// 				State:   STATE_WARNING,
+		// 			},
+		// 			Perfdata: nil,
+		// 		},
+		// 	}
+
+		// 	s, _ := Aggregate(statuses...)
+		// 	So(s.State.Int(), ShouldEqual, STATE_WARNING)
+		// 	So(s.Message, ShouldEqual, "ok - Not so bad")
+		// 	So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
+		// })
 	})
 }
 
 func TestStatus_Aggregate(t *testing.T) {
 	Convey("Aggregates statuses together into existing status", t, func() {
-		otherStatuses := []StatusType{
+		otherStatuses := []*Status{
 			&Status{"ok", STATE_OK},
 			&Status{"Not so bad", STATE_WARNING},
 		}
@@ -96,7 +100,7 @@ func TestStatus_Aggregate(t *testing.T) {
 
 		Convey("Handles an empty slice", func() {
 			status := &Status{"Uh oh", STATE_CRITICAL}
-			emptySlice := make([]StatusType, 0)
+			emptySlice := make([]*Status, 0)
 			status.Aggregate(emptySlice...)
 
 			So(status.State, ShouldEqual, STATE_CRITICAL)
