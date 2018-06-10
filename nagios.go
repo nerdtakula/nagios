@@ -97,7 +97,25 @@ func Aggregate(statuses ...*Status) (*Status, error) {
 // and combines them. Uses the highest State value and combines all the
 // messages.
 func AggregateWithPerfdata(statuses ...*StatusWithPerformanceData) (*StatusWithPerformanceData, error) {
-	return nil, nil
+	if len(statuses) == 0 {
+		return nil, fmt.Errorf("no statuses provided to aggregate")
+	}
+
+	t := &StatusWithPerformanceData{Status: &Status{}, Perfdata: make([]Perfdata, 0)}
+	msgs := make([]string, len(statuses))
+
+	for i, s := range statuses {
+		if s.State > t.State {
+			t.State = s.State
+		}
+		msgs[i] = s.Message
+		for _, p := range s.Perfdata {
+			t.Perfdata = append(t.Perfdata, p)
+		}
+	}
+
+	t.Message = strings.Join(msgs, " - ")
+	return t, nil
 }
 
 // Perfdata is a type representing the Nagios performance data structure.
@@ -152,7 +170,17 @@ func (s StatusWithPerformanceData) Int() int { return s.State.Int() }
 // Aggregate takes multiple Status with Performance data structs and combines
 // them into this struct. Uses the highest State value and combines all the
 // messages.
-func (s *StatusWithPerformanceData) Aggregate(statuses ...*StatusWithPerformanceData) {}
+func (s *StatusWithPerformanceData) Aggregate(statuses ...*StatusWithPerformanceData) {
+	for _, o := range statuses {
+		if o.State > s.State {
+			s.State = o.State
+		}
+		s.Message += " - " + o.Message
+		for _, p := range o.Perfdata {
+			s.Perfdata = append(s.Perfdata, p)
+		}
+	}
+}
 
 // Exit is designed to be called via the `defer` keyword. Prints a Nagios
 // message to STDOUT and exits with appropriate Nagios code.
