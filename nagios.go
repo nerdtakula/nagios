@@ -185,6 +185,6 @@ func OK(output string) {
 }
 
 // ExitWithStatus ...
-func ExitWithStatus(status StatusType) {
+func ExitWithStatus(status *Status) {
 	status.Exit()
 }
