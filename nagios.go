@@ -34,6 +34,10 @@ var (
 	}
 )
 
+type ExitableStatus interface {
+	Exit()
+}
+
 // StatusType is a basic interface
 type StatusType interface {
 	String() string
@@ -213,6 +217,6 @@ func OK(output string) {
 }
 
 // ExitWithStatus ...
-func ExitWithStatus(status *Status) {
+func ExitWithStatus(status ExitableStatus) {
 	status.Exit()
 }
