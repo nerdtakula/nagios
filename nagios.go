@@ -46,6 +46,9 @@ type StatusType interface {
 	Exit()
 }
 
+// New creates a new status
+func New() *Status { return &Status{} }
+
 // Status is a type representing a Nagios check status.
 type Status struct {
 	Message string
@@ -57,6 +60,11 @@ func (s Status) String() string { return fmt.Sprintf("%s: %s", s.State, s.Messag
 
 // Int returns the State integer value
 func (s Status) Int() int { return s.State.Int() }
+
+// WithPerfdata transforms the Status to one with Perfdata
+func (s Status) WithPerfdata() *StatusWithPerformanceData {
+	return &StatusWithPerformanceData{Status: &s, Perfdata: make([]Perfdata, 0)}
+}
 
 // Aggregate takes multiple Status structs and combines them into this struct.
 // Uses the highest State value and combines all the messages

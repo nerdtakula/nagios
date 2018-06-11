@@ -15,6 +15,31 @@ func TestState_String(t *testing.T) {
 	})
 }
 
+func TestStatus_String(t *testing.T) {
+	Convey("Maps the correct strings to values", t, func() {
+	})
+}
+
+func TestStatusWithPerformanceData_String(t *testing.T) {
+	Convey("Maps the correct strings to values", t, func() {
+		// Convey("Aggregates basic statuses together", func() {}
+
+		Convey("String when no perfdata available", func() {
+			status1 := &StatusWithPerformanceData{Status: New()}
+			status1.Message = "FooBar"
+			So(status1.Int(), ShouldEqual, STATE_OK)
+			So(status1.Message, ShouldEqual, "FooBar")
+			So(status1.String(), ShouldEqual, "OK: FooBar")
+
+			status2 := New().WithPerfdata()
+			status2.Message = "FooBar"
+			So(status2.Int(), ShouldEqual, STATE_OK)
+			So(status2.Message, ShouldEqual, "FooBar")
+			So(status2.String(), ShouldEqual, "OK: FooBar")
+		})
+	})
+}
+
 func Test_Aggregate(t *testing.T) {
 	Convey("Aggregates statuses together", t, func() {
 		Convey("Aggregates basic statuses together", func() {
@@ -49,12 +74,21 @@ func Test_Aggregate(t *testing.T) {
 						Perfdata{},
 					},
 				},
+				&StatusWithPerformanceData{
+					Status: &Status{
+						Message: "unknown",
+						State:   STATE_UNKNOWN,
+					},
+					Perfdata: []Perfdata{
+						Perfdata{},
+					},
+				},
 			}
 
 			s, _ := AggregateWithPerfdata(statuses...)
-			So(s.State.Int(), ShouldEqual, STATE_WARNING)
-			So(s.Message, ShouldEqual, "ok - Not so bad")
-			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
+			So(s.State.Int(), ShouldEqual, STATE_UNKNOWN)
+			So(s.Message, ShouldEqual, "ok - Not so bad - unknown")
+			So(s.String(), ShouldEqual, "UNKOWN: ok - Not so bad - unknown")
 		})
 
 		// Convey("Aggregates basic statuses and statuses with perfdata together", func() {
