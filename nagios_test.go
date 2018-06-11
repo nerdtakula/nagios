@@ -1,3 +1,4 @@
+// go test -coverprofile=c.out github.com/nerdtakula/nagios && go tool cover -html=c.out -o coverage.html
 package nagios
 
 import (
@@ -16,7 +17,17 @@ func TestState_String(t *testing.T) {
 }
 
 func TestStatus_String(t *testing.T) {
-	Convey("Maps the correct strings to values", t, func() {
+	Convey("Correct string is returned for status", t, func() {
+		status1 := New()
+		status1.Message = "FooBar"
+		So(status1.Int(), ShouldEqual, STATE_OK)
+		So(status1.Message, ShouldEqual, "FooBar")
+		So(status1.String(), ShouldEqual, "OK: FooBar")
+
+		status1.State = STATE_UNKNOWN
+		So(status1.Int(), ShouldEqual, STATE_UNKNOWN)
+		So(status1.Message, ShouldEqual, "FooBar")
+		So(status1.String(), ShouldEqual, "UNKNOWN: FooBar")
 	})
 }
 
@@ -91,6 +102,12 @@ func Test_Aggregate(t *testing.T) {
 			So(s.String(), ShouldEqual, "UNKOWN: ok - Not so bad - unknown")
 		})
 
+		Convey("Aggregates empty list to confirm error", func() {
+			result, err := Aggregate()
+			So(result, ShouldEqual, nil)
+			So(err.Error(), ShouldEqual, "no statuses provided to aggregate")
+		})
+
 		// Convey("Aggregates basic statuses and statuses with perfdata together", func() {
 		// 	statuses := []StatusType{
 		// 		&Status{"ok", STATE_OK},
@@ -144,8 +161,6 @@ func TestStatus_Aggregate(t *testing.T) {
 }
 
 func TestStatusWithPerformanceData_Aggregate(t *testing.T) {}
-
-func TestStatusType_Aggregate(t *testing.T) {}
 
 func TestPerfdata(t *testing.T) {}
 
