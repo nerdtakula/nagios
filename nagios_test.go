@@ -31,6 +31,16 @@ func TestStatus_String(t *testing.T) {
 	})
 }
 
+func TestStatus_Int(t *testing.T) {
+	Convey("Correct int is returned for status", t, func() {
+		status1 := New()
+		So(status1.Int(), ShouldEqual, int(STATE_OK))
+
+		status1.State = STATE_UNKNOWN
+		So(status1.Int(), ShouldEqual, int(STATE_UNKNOWN))
+	})
+}
+
 func TestStatusWithPerformanceData_String(t *testing.T) {
 	Convey("Maps the correct strings to values", t, func() {
 		// Convey("Aggregates basic statuses together", func() {}
@@ -51,6 +61,7 @@ func TestStatusWithPerformanceData_String(t *testing.T) {
 	})
 }
 
+// Test the exported 'Aggregate' function
 func Test_Aggregate(t *testing.T) {
 	Convey("Aggregates statuses together", t, func() {
 		Convey("Aggregates basic statuses together", func() {
@@ -64,6 +75,18 @@ func Test_Aggregate(t *testing.T) {
 			So(s.Message, ShouldEqual, "ok - Not so bad")
 			So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
 		})
+
+		Convey("Aggregates empty list to confirm error", func() {
+			result, err := Aggregate()
+			So(result, ShouldEqual, nil)
+			So(err.Error(), ShouldEqual, "no statuses provided to aggregate")
+		})
+	})
+}
+
+// Test the exported 'AggregateWithPerfdata' function
+func Test_AggregateWithPerfdata(t *testing.T) {
+	Convey("Aggregates statuses with performance data together", t, func() {
 
 		Convey("Aggregates statuses with perfdata together", func() {
 			statuses := []*StatusWithPerformanceData{
@@ -99,32 +122,14 @@ func Test_Aggregate(t *testing.T) {
 			s, _ := AggregateWithPerfdata(statuses...)
 			So(s.State.Int(), ShouldEqual, STATE_UNKNOWN)
 			So(s.Message, ShouldEqual, "ok - Not so bad - unknown")
-			So(s.String(), ShouldEqual, "UNKOWN: ok - Not so bad - unknown")
+			So(s.String(), ShouldEqual, "UNKNOWN: ok - Not so bad - unknown | ''=;;;;; ''=;;;;; ''=;;;;")
 		})
 
 		Convey("Aggregates empty list to confirm error", func() {
-			result, err := Aggregate()
+			result, err := AggregateWithPerfdata()
 			So(result, ShouldEqual, nil)
 			So(err.Error(), ShouldEqual, "no statuses provided to aggregate")
 		})
-
-		// Convey("Aggregates basic statuses and statuses with perfdata together", func() {
-		// 	statuses := []StatusType{
-		// 		&Status{"ok", STATE_OK},
-		// 		&StatusWithPerformanceData{
-		// 			Status: &Status{
-		// 				Message: "Not so bad",
-		// 				State:   STATE_WARNING,
-		// 			},
-		// 			Perfdata: nil,
-		// 		},
-		// 	}
-
-		// 	s, _ := Aggregate(statuses...)
-		// 	So(s.State.Int(), ShouldEqual, STATE_WARNING)
-		// 	So(s.Message, ShouldEqual, "ok - Not so bad")
-		// 	So(s.String(), ShouldEqual, "WARNING: ok - Not so bad")
-		// })
 	})
 }
 
@@ -160,9 +165,57 @@ func TestStatus_Aggregate(t *testing.T) {
 	})
 }
 
-func TestStatusWithPerformanceData_Aggregate(t *testing.T) {}
+func TestStatusWithPerformanceData_Aggregate(t *testing.T) {
+	Convey("Aggregates statuses w/perfdata together into existing status", t, func() {
+		otherStatuses := []*StatusWithPerformanceData{
+			&StatusWithPerformanceData{Status: &Status{Message: "ok", State: STATE_OK}},
+			&StatusWithPerformanceData{Status: &Status{Message: "Not so bad", State: STATE_WARNING}},
+		}
 
-func TestPerfdata(t *testing.T) {}
+		Convey("Picks the worst status", func() {
+			status := &StatusWithPerformanceData{Status: &Status{Message: "Uh oh", State: STATE_CRITICAL}}
+			status.Aggregate(otherStatuses...)
+
+			So(status.State, ShouldEqual, STATE_CRITICAL)
+		})
+
+		Convey("Aggregates the messages", func() {
+			status := &StatusWithPerformanceData{Status: &Status{Message: "Uh oh", State: STATE_CRITICAL}}
+			status.Aggregate(otherStatuses...)
+
+			So(status.Message, ShouldEqual, "Uh oh - ok - Not so bad")
+		})
+
+		Convey("Handles an empty slice", func() {
+			status := &StatusWithPerformanceData{Status: &Status{Message: "Uh oh", State: STATE_CRITICAL}}
+			emptySlice := make([]*StatusWithPerformanceData, 0)
+			status.Aggregate(emptySlice...)
+
+			So(status.State, ShouldEqual, STATE_CRITICAL)
+			So(status.Message, ShouldEqual, "Uh oh")
+		})
+	})
+}
+
+func TestPerfdata(t *testing.T) {
+	Convey("Test formatting of performance data", t, func() {
+		pd1 := Perfdata{
+			Label:         "foo",
+			Value:         "1",
+			Uom:           "ms",
+			WarnThreshold: "10",
+			CritThreshold: "20",
+			MinValue:      "0",
+			MaxValue:      "100",
+		}
+		So(pd1.String(), ShouldEqual, "'foo'=1ms;10;20;0;100")
+		pd1.Uom = ""
+		So(pd1.String(), ShouldEqual, "'foo'=1;10;20;0;100")
+
+		pd2 := Perfdata{}
+		So(pd2.String(), ShouldEqual, "''=;;;;")
+	})
+}
 
 func TestConstructedNagiosMessage(t *testing.T) {
 	Convey("Constructs a Nagios message without performance data", t, func() {
