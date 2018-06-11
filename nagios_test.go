@@ -2,6 +2,7 @@
 package nagios
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -253,5 +254,80 @@ func TestConstructedNagiosMessage(t *testing.T) {
 		perfdata4 := Perfdata{Label: "metric", Value: "1234", Uom: "", WarnThreshold: "12", CritThreshold: "3400", MinValue: "0", MaxValue: "99999"}
 		statusOKPerf := &StatusWithPerformanceData{statusOK, []Perfdata{perfdata4}}
 		So(statusOKPerf.String(), ShouldEqual, "OK: ok | 'metric'=1234;12;3400;0;99999")
+	})
+}
+
+func TestExit(t *testing.T) {
+	Convey("Tests expected return codes are returned", t, func() {
+		// Save current function and restore at the end:
+		oldOsExit := osExit
+		defer func() { osExit = oldOsExit }()
+
+		// Define replacement for the Exit function
+		var got int
+		osExit = func(code int) { got = code }
+
+		Convey("Tests various exported exit statuses", func() {
+			Unknown("unknown")
+			So(got, ShouldEqual, int(STATE_UNKNOWN))
+			Critical(fmt.Errorf("critical"))
+			So(got, ShouldEqual, int(STATE_CRITICAL))
+			Warning("warning")
+			So(got, ShouldEqual, int(STATE_WARNING))
+			OK("ok")
+			So(got, ShouldEqual, int(STATE_OK))
+		})
+
+		Convey("Tests Exit functions from Statuses", func() {
+			statusOk := &Status{"ok", STATE_OK}
+			statusOk.Exit()
+			So(got, ShouldEqual, int(STATE_OK))
+			ExitWithStatus(statusOk)
+			So(got, ShouldEqual, int(STATE_OK))
+
+			statusWarning := &Status{"Not so bad", STATE_WARNING}
+			statusWarning.Exit()
+			So(got, ShouldEqual, int(STATE_WARNING))
+			ExitWithStatus(statusWarning)
+			So(got, ShouldEqual, int(STATE_WARNING))
+
+			statusCritical := &Status{"Critical", STATE_CRITICAL}
+			statusCritical.Exit()
+			So(got, ShouldEqual, int(STATE_CRITICAL))
+			ExitWithStatus(statusCritical)
+			So(got, ShouldEqual, int(STATE_CRITICAL))
+
+			statusUnknown := &Status{"Unknown", STATE_UNKNOWN}
+			statusUnknown.Exit()
+			So(got, ShouldEqual, int(STATE_UNKNOWN))
+			ExitWithStatus(statusUnknown)
+			So(got, ShouldEqual, int(STATE_UNKNOWN))
+		})
+
+		Convey("Tests Exit functions from Statuses with performance data", func() {
+			statusOk := &StatusWithPerformanceData{Status: &Status{"ok", STATE_OK}}
+			statusOk.Exit()
+			So(got, ShouldEqual, int(STATE_OK))
+			ExitWithStatus(statusOk)
+			So(got, ShouldEqual, int(STATE_OK))
+
+			statusWarning := &StatusWithPerformanceData{Status: &Status{"Not so bad", STATE_WARNING}}
+			statusWarning.Exit()
+			So(got, ShouldEqual, int(STATE_WARNING))
+			ExitWithStatus(statusWarning)
+			So(got, ShouldEqual, int(STATE_WARNING))
+
+			statusCritical := &StatusWithPerformanceData{Status: &Status{"Critical", STATE_CRITICAL}}
+			statusCritical.Exit()
+			So(got, ShouldEqual, int(STATE_CRITICAL))
+			ExitWithStatus(statusCritical)
+			So(got, ShouldEqual, int(STATE_CRITICAL))
+
+			statusUnknown := &StatusWithPerformanceData{Status: &Status{"Unknown", STATE_UNKNOWN}}
+			statusUnknown.Exit()
+			So(got, ShouldEqual, int(STATE_UNKNOWN))
+			ExitWithStatus(statusUnknown)
+			So(got, ShouldEqual, int(STATE_UNKNOWN))
+		})
 	})
 }

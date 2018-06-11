@@ -32,6 +32,9 @@ var (
 		STATE_CRITICAL: "CRITICAL",
 		STATE_UNKNOWN:  "UNKNOWN",
 	}
+
+	// Exit function
+	osExit = os.Exit
 )
 
 type ExitableStatus interface {
@@ -81,7 +84,7 @@ func (s *Status) Aggregate(statuses ...*Status) {
 // message to STDOUT and exits with appropriate Nagios code.
 func (s Status) Exit() {
 	fmt.Fprintln(os.Stdout, s)
-	os.Exit(s.State.Int())
+	osExit(s.State.Int())
 }
 
 // Aggregate takes multiple Status structs and combines them. Uses the highest
@@ -198,7 +201,7 @@ func (s *StatusWithPerformanceData) Aggregate(statuses ...*StatusWithPerformance
 // message to STDOUT and exits with appropriate Nagios code.
 func (s StatusWithPerformanceData) Exit() {
 	fmt.Fprintln(os.Stdout, s)
-	os.Exit(s.State.Int())
+	osExit(s.State.Int())
 }
 
 // Unknown provides a quick way to exit with an UNKNOWN state and appropriate
