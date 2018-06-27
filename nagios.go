@@ -182,6 +182,17 @@ func (s StatusWithPerformanceData) String() string {
 // Int returns the value of the state.
 func (s StatusWithPerformanceData) Int() int { return s.State.Int() }
 
+// SetPerfData clears the existing perfdata and sets new values
+func (s *StatusWithPerformanceData) SetPerfData(p ...Perfdata) {
+	s.Perfdata = make([]Perfdata, 0)
+	s.AddPerfData(p...)
+}
+
+// AddPerfData new perfdata items to the existing items
+func (s *StatusWithPerformanceData) AddPerfData(p ...Perfdata) {
+	s.Perfdata = append(s.Perfdata, p...)
+}
+
 // Aggregate takes multiple Status with Performance data structs and combines
 // them into this struct. Uses the highest State value and combines all the
 // messages.
