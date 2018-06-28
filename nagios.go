@@ -76,7 +76,10 @@ func (s *Status) Aggregate(statuses ...*Status) {
 		if o.State > s.State {
 			s.State = o.State
 		}
-		s.Message += " - " + o.Message
+
+		if o.Message != "" {
+			s.Message += " - " + o.Message
+		}
 	}
 }
 
@@ -201,7 +204,11 @@ func (s *StatusWithPerformanceData) Aggregate(statuses ...*StatusWithPerformance
 		if o.State > s.State {
 			s.State = o.State
 		}
-		s.Message += " - " + o.Message
+
+		if o.Message != "" {
+			s.Message += " - " + o.Message
+		}
+
 		for _, p := range o.Perfdata {
 			s.Perfdata = append(s.Perfdata, p)
 		}
